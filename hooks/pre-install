@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Set version to Windows 10.
+"$WINELOADER" winecfg /v win10

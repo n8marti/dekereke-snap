@@ -1,0 +1,108 @@
+name: dekereke
+base: core20
+adopt-info: installer
+summary: Sort word list cards virtually.
+description: |
+  Sort word list cards virtually.
+
+confinement: strict # use 'strict' once you have the right plugs and slots
+architectures:
+  - amd64
+
+license: GPL-3.0+
+contact: https://github.com/n8marti/dekereke-snap/issues
+
+environment:
+  TRICKS: "dotnet462" # corefonts ddr=gdi fontsmooth=rgb
+  WINEDLLOVERRIDES: "mscoree,mshtml=" # Prevent pop-ups about Wine Mono and Wine Gecko
+
+apps:
+  dekereke:
+    extensions: [gnome-3-38] # core20
+    environment:
+      INSTALL_URL: "http://casali.canil.ca/Dekereke.zip"
+      INSTALL_EXE: "${SNAP}/installer/setup.exe"
+      RUN_EXE: "C:/users/${USER}/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Dekereke/Dekereke.appref-ms"
+    command: bin/sommelier run-exe
+
+  init:
+    extensions: [gnome-3-38] # core20
+    command: bin/sommelier
+    environment:
+      INIT: '1'
+
+  wine:
+    extensions: [gnome-3-38] # core20
+    command: bin/sommelier
+
+  winecfg:
+    extensions: [gnome-3-38] # core20
+    command: bin/sommelier winecfg
+
+  winetricks:
+    extensions: [gnome-3-38] # core20
+    command: bin/sommelier winetricks
+
+plugs:
+  audio-playback:
+  desktop:
+  desktop-legacy:
+  home:
+  network:
+  # network-bind:
+  removable-media:
+  x11:
+  wayland:
+
+  wine-runtime:
+    interface: content
+    target: $SNAP/wine-runtime
+    default-provider: wine-platform-runtime
+  wine-7-stable:
+    interface: content
+    target: $SNAP/wine-platform
+    default-provider: wine-platform-7-stable-core20
+
+parts:
+  installer:
+    plugin: dump
+    source: http://casali.canil.ca/Dekereke.zip
+    build-packages:
+      - unzip
+      - xmlstarlet
+    override-build: |
+      unzip ${SNAPCRAFT_PART_BUILD}/Dekereke.zip -d ${SNAPCRAFT_PART_INSTALL}/installer
+      version=$(
+        grep 'Dekereke.application' ${SNAPCRAFT_PART_INSTALL}/installer/Dekereke.application \
+          | xmlstarlet sel -t -v '//@version'
+      )
+      snapcraftctl set-version "$version"
+      snapcraftctl set-grade "devel"
+      # snapcraftctl build
+    stage:
+      - installer/
+
+  hooks:
+    plugin: dump
+    source: hooks/
+    organize:
+      "*": sommelier/hooks/
+    stage:
+      - sommelier
+
+  sommelier-core:
+    plugin: make
+    source: https://github.com/snapcrafters/sommelier-core.git
+    # need "master" for core20 b/c of https://github.com/mmtrt/sommelier-core/commit/096bb179b975df5a89e88b3bac048901ded465fc
+    source-branch: "master"
+    override-prime: |
+      snapcraftctl prime
+
+      # Don't let yad dialogs stay always-on-top.
+      sed -r -i 's|(yad.*) --on-top|\1|g' bin/sommelier
+      # Remove annoying yad dialog for interactive MSI install.
+      sed -r -i 's|(yes.*Installing .*EXE_NAME.*)|# \1|' bin/sommelier
+      sed -r -i 's|(.*INSTALL_YAD_PID)|# \1|g' bin/sommelier
+
+      # Add init-only command.
+      sed -r -i 's|(\s+)(init_wine)$|\1\2\n\1if [[ $INIT == '1' ]]; then exit 0; fi|' bin/sommelier
